@@ -18,6 +18,14 @@ const Course = sequelize.define('Course', {
     type: DataTypes.STRING(255),
     allowNull: false,
   },
+  image: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+  },
+  duration: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+  },
   heading: {
     type: DataTypes.TEXT('long'),
   },
