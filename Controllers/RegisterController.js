@@ -1,5 +1,6 @@
 const express = require('express');
 const connection = require('../db/db');
+const { check, validationResult } = require('express-validator');
 const app = express();
 const { secretKey } = require('../db/config');
 const bcrypt = require('bcrypt');
@@ -153,8 +154,8 @@ if (!isValidPassword(password)) {
 
                 // Insert data into MySQL database with hashed password
                 connection.query(
-                    'INSERT INTO users (email, name, phoneNumber, password) VALUES (?, ?, ?, ?)',
-                    [userEmail, name, phoneNumber, hashedPassword],
+                    'INSERT INTO users (email, name, phoneNumber, password, p_type) VALUES (?, ?, ?, ?, ?)',
+                    [userEmail, name, phoneNumber, hashedPassword ,'Student'],
                     (err, results) => {
                         if (err) {
                             console.error('Error inserting data into MySQL:', err);
@@ -175,28 +176,92 @@ if (!isValidPassword(password)) {
 // Route for completing registration, with OTP verification middleware
 
 
+const complete_t_Registration = (req, res) => {
+    const { name,  password , phoneNumber , email } = req.body;
+
+if(!name||!password||!phoneNumber||!email ){
+    res.status(400).json({ error: "Please Enter Details || All Feilds Are Required" });
+    return;
+}
+
+ // Validate phone number
+ if (!isValidPhoneNumber(phoneNumber)) {
+    res.status(400).json({ error: "Invalid phone number" });
+    return;
+}
+
+// Validate password
+if (!isValidPassword(password)) {
+    res.status(400).json({ error: "Invalid password" });
+    return;
+}
+
+    // Hash password
+    bcrypt.hash(password, 10, (err, hashedPassword) => {
+        if (err) {
+            console.error('Error hashing password:', err);
+            res.status(500).json({ error: "Internal Server Error" });
+            return;
+        }
+
+        // Check if email already exists
+        connection.query(
+            'SELECT COUNT(*) AS count FROM users WHERE email = ?',
+            [email],
+            (err, results) => {
+                if (err) {
+                    console.error('Error querying database:', err);
+                    res.status(500).json({ error: "Internal Server Error" });
+                    return;
+                }
+                
+                const count = results[0].count;
+                if (count > 0) {
+                    res.status(409).json({ error: "Email already exists  || Chosse Different Email" });
+                    return;
+                }
+
+                // Insert data into MySQL database with hashed password
+                connection.query(
+                    'INSERT INTO users (email, name, phoneNumber, password , p_type) VALUES (?, ?, ?, ?, ?)',
+                    [email, name, phoneNumber, hashedPassword ,'Teacher'],
+                    (err, results) => {
+                        if (err) {
+                            console.error('Error inserting data into MySQL:', err);
+                            res.status(500).json({ error: "Internal Server Error" });
+                            return;
+                        }
+                        res.status(201).json({
+                            message: "Deatils Enter successfully || Now Login To The Application",
+                            insertedId: results.insertId
+                        });
+                    }
+                );
+            }
+        );
+    });
+};
+
  
    
-const Login = (req, res) => {
+const Login = async (req, res) => {
+    const validationRules = [
+        check('email')  .notEmpty().withMessage('Email field is required')
+        .isEmail().withMessage('Please enter a valid email address'),
+        check('password').notEmpty().withMessage('password feild isrequired || please enter password'),
+       
+        
+      ];
+  
+      // Run validation and check for errors
+      await Promise.all(validationRules.map(validation => validation.run(req)));
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
     const { email, password, remember } = req.body; // Extract 'remember' from request body
-
-    if (!password || !email) {
-        return res.status(400).json({ error: "Please Enter Email And Password || All Fields Are Required" });
-    }
-
-    // Validate email format
-    if (!isValidEmail(email)) {
-        return res.status(400).json({ error: "Invalid Email Format" });
-    }
-
-    // Validate password format
-    if (!isValidPassword(password)) {
-        return res.status(400).json({ error: "Invalid password format" });
-    }
-
-    // Check if user is already logged in
     if (req.session.userId) {
-        return res.status(400).json({ success: false, error: "User is already logged in" });
+        return res.status(200).json({ success: true, message: "User is already logged in" });
     }
 
     // Query the database for user with the provided email
@@ -208,7 +273,7 @@ const Login = (req, res) => {
         }
 
         if (results.length === 0) {
-            return res.status(401).json({ error: "Email or Password is incorrect" });
+            return res.status(401).json({ error: "Email or Password is incorrect || Check Your credentials" });
         }
 
         const user = results[0];
@@ -228,7 +293,7 @@ const Login = (req, res) => {
                         console.error('Error updating remember token: ' + err.message);
                     }
                 });
-
+                
                 // Send the remember me token as a cookie to the user
                 res.cookie('remember_me', rememberToken, { maxAge: 30 * 24 * 60 * 60 * 1000 }); // Expires in 30 days
             }
@@ -254,6 +319,7 @@ const Login = (req, res) => {
     });
 };
 
+
 const Validate_session = (req, res) => {
     const sessionId = req.headers['session-token'];
 
@@ -275,28 +341,14 @@ const Validate_session = (req, res) => {
   });
 }
 const getProfile = (req, res) => {
-    if (!req.session.userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
    
-    // Fetch user profile from database based on session data
-    const userId = req.session.userId;
-    const query = 'SELECT * FROM users WHERE id = ?';
-    connection.query(query, [userId], (err, results) => {
-        if (err) {
-            console.error('Error querying database: ' + err.message);
-            return res.status(500).json({ error: "Internal Server Error" });
-        }
+      
+  const user = req.user;
+  const userId = user.id;
 
-        if (results.length === 0) {
-            return res.status(404).json({ error: "User not found" });
-        }
-
-        const userProfile = results[0];
-        // Remove sensitive data like password before sending response
-        delete userProfile.password;
-        return res.status(200).json({ profile: userProfile, session:req.sessionID });
-    });
+  res.json({
+    user
+  })
 };
 
 const updateRegister=(req, res)=>{
@@ -309,33 +361,28 @@ const DeleteRegister=(req, res)=>{
         message:`Delete registeration routes  ${req.params.id}`
     })
 };
-
 const Logout = (req, res) => {
-    const sessionId = req.headers['session-token'];
+    const sessionToken = req.headers['session-token'];
 
-    if (!sessionId) {
+    if (!sessionToken) {
         return res.status(401).json({ error: 'Session token is missing' });
     }
 
-    connection.query('DELETE FROM sessions WHERE token = ?', [sessionId], (err, results) => {
+    // Delete session from the database
+    const deleteSessionQuery = 'DELETE FROM sessions WHERE token = ?';
+    connection.query(deleteSessionQuery, [sessionToken], (err, results) => {
         if (err) {
             console.error('Error deleting session from database:', err);
             return res.status(500).json({ error: 'Internal Server Error' });
         }
 
-        req.session.destroy((err) => {
-            if (err) {
-                console.error('Error destroying session: ' + err.message);
-                return res.status(500).json({ error: "Internal Server Error" });
-            }
-            
-            // Clear remember me token cookie
-            res.clearCookie('remember_me');
+        // Clear remember me token cookie if any
+        res.clearCookie('remember_me');
 
-            return res.status(200).json({ message: "Logout Successful" });
-        });
+        return res.status(200).json({ message: 'Logout Successful' });
     });
 };
+
 
 
 
@@ -370,7 +417,7 @@ module.exports={
     Login,
     getRegisters,
     getProfile ,
-    provideEmail, completeRegistration,
+    provideEmail, completeRegistration, complete_t_Registration,
       DeleteRegister , 
       updateRegister,
       verifyOTP,

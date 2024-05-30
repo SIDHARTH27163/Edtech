@@ -20,12 +20,16 @@ app.use(session({
       maxAge: 24 * 60 * 60 * 1000 // 1 day (adjust as needed)
   }
 }));
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:3000','http:// 192.168.180.143:1024','http:// 192.168.178.143:1024'], // Replace with your frontend URL
+  credentials: true // Enable credentials (cookies, authorization headers)
+}));
 
 // Define your routes here
-app.use("/api/register", require("./routes/RegsiterRoutes"));
-app.use("/api/courses", require("./routes/CourseRoutes"));
-
+app.use("/api/auth", require("./routes/RegsiterRoutes"));
+app.use("/api/domains", require("./routes/DomainRoutes"));
+app.use("/api/courses", require("./routes/CoursesRoutes"));
+app.use("/api/user", require("./routes/UserRoutes"));
 app.use('/uploads', express.static('uploads'));
 
 
