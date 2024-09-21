@@ -40,7 +40,7 @@ function sendOTP(email, callback) {
         service: 'Gmail',
         auth: {
             user: 'sidguleria0@gmail.com', // Replace with your email address
-            pass: 'pbkh uiqm npho celt' // Replace with your email password
+            pass: '' // Replace with your email password
         }
     });
 
